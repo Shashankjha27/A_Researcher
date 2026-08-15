@@ -2,7 +2,7 @@
 
 #### Not Summarizing, but Cross-examining papers!
 
-Given Papers/ Collection of papers on the same topic, and it will pull out made empirical claims, and then identify support claims and contradictions (if any) using NLI model (Not simply repurposed or specialized LLM).
+Given Papers/ Collection of papers on the same topic, and it will extract empirical claims made, and then identify support claims and contradictions (if any) using NLI model (Not simply repurposed or specialized LLM).
 
 Flag the threat to validity which a careful reviewer will look for, and hand back a confidence-score report with claims linked to the exact sentences they came from.
 
@@ -12,7 +12,7 @@ As much as AI models have become all-purpose they often lack in the same things,
 
 Ask any LLM to summarize what the research paper says about something, and it will respond with confidence an answer comprising of assortment of actual truth of the paper, supporting findings, contradictory statements, and not to mention if any - hallucination, with no way to tell them apart. 
 
-LLM, Hardware and Agents deployed for all intense and purposes only change how **Educated** the **Guess** is.
+LLM, Hardware and Agents deployed for all intents and purposes only change how **Educated** the **Guess** is.
 
 ## What This Does Instead
 
@@ -36,10 +36,10 @@ flowchart LR
   C --> D[NLI contradiction engine<br/> benchmarked on SciFact]
   D --> E[Integrity flags<br/>pure rule functions]
   E --> F[Confidence score<br/> pure functions]
-  F --> G[Sythesis report<br/>grouped by sub-topic]
+  F --> G[Synthesis report<br/>grouped by sub-topic]
   C -.source_sentence.-> G
 ```
-One Monolithic FastApi service.
+One Monolithic FastAPI service.
 JSONL document store, No Queues, No Vector DB, No Training - inference only.
 
 ---
@@ -49,7 +49,12 @@ JSONL document store, No Queues, No Vector DB, No Training - inference only.
 |---|---|---|
 | Backend | FastAPI + Pydantic v2 | Free Interactive API docs, schema gate for LLM output |
 |Contradiction Detection | Pretrained NLI classifier (DeBERTa-v3 zeroshot / SciFact-tuned)| Deterministic, Benchmarkable, ~500mb |
-Pair Reduction|'all-MiniLM-L6-v2' embeddings + clusteringg|O(n²) → tractable |
+Pair Reduction|'all-MiniLM-L6-v2' embeddings + clustering|O(n²) → tractable |
 Claim extraction |LLM  (API/Local)+Json Schema gate retry <= 2|Judgement Task, but shape is guaranteed automatically|
 |Scoring and Flags|Pure Python functions|Explainable, zero LLM guessing|
-|Storage|JSONL|Prototype scope, Scalable for future
+|Storage|JSONL|Prototype scope|
+
+
+## AI TRANSPARENCY
+
+This project is created by humans and not by AI, however AI is used in assistance for the work. There is no block of code or concept used in this project that is not Human-reviewed and role of the AI is strictly limmited to assistance rather than taking responsibility itself.
