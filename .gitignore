@@ -1,0 +1,13 @@
+.venv/
+.__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+data/out/*.jsonl
+.env
+.idea/
+.vscode/
+.DS_Store
+*.md
+!README.md
