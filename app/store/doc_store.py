@@ -2,10 +2,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from config import DATA_OUT
 from pydantic import BaseModel
 
 from app.schemas import Claim, ClaimPairVerdict, Flag, Paper
+from config import DATA_OUT
 
 ENTITY_MODELS: dict[str, type[BaseModel]] = {
     "papers": Paper,
