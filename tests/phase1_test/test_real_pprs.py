@@ -1,7 +1,9 @@
 from pathlib import Path
 
+from app.llm.client import get_llm_call
 from app.pipeline.extract import extract_claims_from_chunk
 from app.pipeline.ingest import ingest_paper
+from app.store.doc_store import DocStore
 
 
 def test_real_paper_ingest_and_extract():
@@ -15,26 +17,22 @@ def test_real_paper_ingest_and_extract():
         year=2026,
     )
 
+    assert paper.blocks
+
     print("\nPAPER:")
     print(paper.title)
-
     print("\nBLOCKS:", len(paper.blocks))
 
-    for block in paper.blocks:
-        print("\nSECTION:", block.section)
-        print("START:", block.start_offset)
-        print("END:", block.end_offset)
-        print("TEXT:")
-        print(block.text[:1000])
-
+    llm_call = get_llm_call()
     extracted_claims = []
 
-    def fake_llm(prompt: str) -> str:
-        return "[]"
-
     for block in paper.blocks:
+        print(f"\nSECTION: {block.section}")
+        print(f"START: {block.start_offset}")
+        print(f"END: {block.end_offset}")
+
         claims = extract_claims_from_chunk(
-            llm_call=fake_llm,
+            llm_call=llm_call,
             chunk_text=block.text,
             paper_id=paper.paper_id,
             section=block.section,
@@ -45,11 +43,34 @@ def test_real_paper_ingest_and_extract():
 
     print("\nEXTRACTED CLAIMS:", len(extracted_claims))
 
+    assert extracted_claims
+
     for claim in extracted_claims:
         print(claim.model_dump_json(indent=2))
 
-    assert paper.blocks
-    assert isinstance(extracted_claims, list)
+        assert claim.paper_id == paper.paper_id
+        assert claim.claim_text.strip()
+        assert claim.provenance.source_sentence.strip()
+        assert claim.provenance.end_offset > claim.provenance.start_offset
+
+        source = claim.provenance.source_sentence
+
+        assert source
+
+    store = DocStore()
+
+    for claim in extracted_claims:
+        store.save("claims", claim)
+
+    saved_claims = store.all("claims")
+
+    print("\nSAVED CLAIMS:", len(saved_claims))
+
+    assert len(saved_claims) >= len(extracted_claims)
+
+    for claim in saved_claims[-len(extracted_claims):]:
+        print(claim.model_dump_json(indent=2))
+
 
 def test_golden_chunk_with_three_claims():
     chunk = (
