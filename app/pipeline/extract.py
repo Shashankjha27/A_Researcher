@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable
-from typing import Any
 
-from pydantic import ValidationError
-
-from app.schemas import Claim, Provenance
-from app.schemas.enums import EffectDirection, MethodType
+from app.pipeline.llm_utils import (
+    LLMOutputError,
+    parse_json_array,
+    validate_claims,
+)
+from app.schemas import Claim
 
 logger = logging.getLogger(__name__)
 
@@ -37,172 +37,6 @@ TEXT:
 
 class ExtractionError(Exception):
     pass
-
-
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-
-    if not text.startswith("```"):
-        return text
-
-    lines = text.splitlines()
-
-    if lines and lines[0].strip().lower() in {"```", "```json"}:
-        lines = lines[1:]
-
-    if lines and lines[-1].strip() == "```":
-        lines = lines[:-1]
-
-    return "\n".join(lines).strip()
-
-
-def _find_source_offsets(
-    source_sentence: str,
-    chunk_text: str,
-    chunk_start_offset: int,
-) -> tuple[int, int]:
-    start = chunk_text.find(source_sentence)
-
-    if start == -1:
-        raise ExtractionError(
-            "source_sentence not found verbatim in chunk"
-        )
-
-    end = start + len(source_sentence)
-
-    return (
-        chunk_start_offset + start,
-        chunk_start_offset + end,
-    )
-
-
-def _to_claim(
-    item: Any,
-    index: int,
-    paper_id: str,
-    section: str,
-    chunk_start_offset: int,
-    chunk_text: str,
-) -> Claim:
-    if not isinstance(item, dict):
-        raise ExtractionError(
-            f"item {index} is not an object"
-        )
-
-    claim_text = item.get("claim_text")
-    method_value = item.get("method_type")
-    effect_value = item.get("effect_direction")
-    sample_size = item.get("sample_size")
-    source_sentence = item.get("source_sentence")
-
-    if not isinstance(claim_text, str) or not claim_text.strip():
-        raise ExtractionError(
-            f"item {index}: claim_text missing or empty"
-        )
-
-    if not isinstance(source_sentence, str) or not source_sentence.strip():
-        raise ExtractionError(
-            f"item {index}: source_sentence missing or empty"
-        )
-
-    if (
-        sample_size is not None
-        and (
-            not isinstance(sample_size, int)
-            or isinstance(sample_size, bool)
-        )
-    ):
-        raise ExtractionError(
-            f"item {index}: sample_size must be an integer or null"
-        )
-
-    if isinstance(sample_size, int) and sample_size < 0:
-        raise ExtractionError(
-            f"item {index}: sample_size cannot be negative"
-        )
-
-    try:
-        method_type = MethodType(method_value)
-    except (TypeError, ValueError) as exc:
-        raise ExtractionError(
-            f"item {index}: invalid method_type: {method_value!r}"
-        ) from exc
-
-    try:
-        effect_direction = EffectDirection(effect_value)
-    except (TypeError, ValueError) as exc:
-        raise ExtractionError(
-            f"item {index}: invalid effect_direction: {effect_value!r}"
-        ) from exc
-
-    start_offset, end_offset = _find_source_offsets(
-        source_sentence=source_sentence,
-        chunk_text=chunk_text,
-        chunk_start_offset=chunk_start_offset,
-    )
-
-    try:
-        return Claim(
-            claim_id=(
-                f"cl_{paper_id}_{section}_"
-                f"{chunk_start_offset}_{index}"
-            ),
-            paper_id=paper_id,
-            claim_text=claim_text.strip(),
-            method_type=method_type,
-            effect_direction=effect_direction,
-            provenance=Provenance(
-                source_sentence=source_sentence,
-                start_offset=start_offset,
-                end_offset=end_offset,
-            ),
-            sample_size=sample_size,
-        )
-    except ValidationError as exc:
-        raise ExtractionError(
-            f"item {index}: schema validation failed: {exc}"
-        ) from exc
-
-
-def _parse_and_validate(
-    raw_output: str,
-    paper_id: str,
-    section: str,
-    chunk_start_offset: int,
-    chunk_text: str,
-) -> list[Claim]:
-    text = _strip_fences(raw_output)
-
-    if not text:
-        raise ExtractionError("empty LLM response")
-
-    try:
-        parsed: Any = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise ExtractionError(
-            f"invalid JSON: {exc.msg} at position {exc.pos}"
-        ) from exc
-
-    if not isinstance(parsed, list):
-        raise ExtractionError(
-            "expected a JSON array at top level"
-        )
-
-    claims: list[Claim] = []
-
-    for index, item in enumerate(parsed):
-        claims.append(
-            _to_claim(
-                item=item,
-                index=index,
-                paper_id=paper_id,
-                section=section,
-                chunk_start_offset=chunk_start_offset,
-                chunk_text=chunk_text,
-            )
-        )
-
-    return claims
 
 
 def extract_claims_from_chunk(
@@ -249,12 +83,14 @@ def extract_claims_from_chunk(
                     "LLM call did not return a string"
                 )
 
-            claims = _parse_and_validate(
-                raw_output=raw_output,
+            parsed = parse_json_array(raw_output)
+
+            claims = validate_claims(
+                parsed=parsed,
                 paper_id=paper_id,
                 section=section,
-                chunk_start_offset=chunk_start_offset,
                 chunk_text=chunk_text,
+                chunk_start_offset=chunk_start_offset,
             )
 
             logger.info(
@@ -267,7 +103,7 @@ def extract_claims_from_chunk(
 
             return claims
 
-        except (ExtractionError, json.JSONDecodeError) as exc:
+        except (LLMOutputError, ExtractionError) as exc:
             last_error = str(exc)
             last_output = (
                 raw_output

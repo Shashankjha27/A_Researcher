@@ -21,6 +21,7 @@ ID_FIELDS: dict[str, str] = {
     "flags": "flag_id",
 }
 
+
 class DocStore:
     def __init__(self, base_dir: str | Path = DATA_OUT) -> None:
         self.base_dir = Path(base_dir)
@@ -36,35 +37,45 @@ class DocStore:
 
     def _iter(self, entity: str) -> Iterable[BaseModel]:
         path = self._path(entity)
+
         if not path.exists():
             return
+
         model = ENTITY_MODELS[entity]
-        with open(path, encoding="utf-8") as fh:
+
+        with path.open(encoding="utf-8") as fh:
             for line in fh:
                 if line.strip():
                     yield model.model_validate_json(line)
 
     def save(self, entity: str, doc: BaseModel) -> None:
         path = self._path(entity)
-        with open(path, "a", encoding="utf-8") as fh:
+
+        with path.open("a", encoding="utf-8") as fh:
             fh.write(doc.model_dump_json() + "\n")
-            fh.flush()
 
     def all(self, entity: str) -> list[BaseModel]:
         return list(self._iter(entity))
 
     def get(self, entity: str, doc_id: str) -> BaseModel | None:
         self._check_entity(entity)
+
         id_field = ID_FIELDS[entity]
+
         for doc in self._iter(entity):
             if getattr(doc, id_field) == doc_id:
                 return doc
+
         return None
 
     def query(self, entity: str, **filters: Any) -> list[BaseModel]:
         self._check_entity(entity)
+
         return [
             doc
             for doc in self._iter(entity)
-            if all(getattr(doc, key) == value for key, value in filters.items())
+            if all(
+                getattr(doc, key) == value
+                for key, value in filters.items()
+            )
         ]

@@ -9,7 +9,6 @@ from pypdf.errors import PdfReadError
 
 from app.schemas import Block, Paper, SourceType
 
-
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf"}
 
 _ABBREVS = {
@@ -451,24 +450,9 @@ def ingest_paper(
 ) -> Paper:
     path = Path(path)
 
-    if not path.is_file():
-        raise FileNotFoundError(
-            f"no such paper: {path}"
-        )
+    text = read_paper(path)
 
     suffix = path.suffix.lower()
-
-    if suffix not in SUPPORTED_EXTENSIONS:
-        supported = ", ".join(
-            sorted(SUPPORTED_EXTENSIONS)
-        )
-
-        raise ValueError(
-            f"unsupported file type '{suffix}'. "
-            f"Expected: {supported}"
-        )
-
-    text = read_paper(path)
 
     resolved_source = source or (
         SourceType.PDF
