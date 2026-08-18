@@ -5,9 +5,9 @@ import re
 from app.pipeline.ingest import split_sentences
 
 _EMPIRICAL_PATTERNS = (
-    r"\b(increased|decreased|improved|reduced|enhanced|inhibited|"
+    (r"\b(increased|decreased|improved|reduced|enhanced|inhibited|"
     r"associated|correlated|predicted|outperformed|achieved|observed|"
-    r"found|yielded|resulted|caused|affected)\b",
+    r"found|yielded|resulted|caused|affected)\b"),
     r"\b\d+(?:\.\d+)?\s*%\b",
     r"\bp\s*(?:<|>|=)\s*0?\.\d+\b",
     r"\b(auc|auc-roc|auc-pr|accuracy|precision|recall|f1|specificity)\b",
