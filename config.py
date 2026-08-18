@@ -13,27 +13,15 @@ NLI_MODEL = "MoritzLaurer/deberta-v3-base-zeroshot-v2"
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 CONTRIEVER_MODEL = "facebook/contriever"
 
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 OLLAMA_BASE_URL = os.environ.get(
     "OLLAMA_BASE_URL",
     "http://localhost:11434",
 )
-LLM_MODEL = os.environ.get(
-    "OLLAMA_MODEL",
-    "",
-)
-OPENAI_MODEL = os.environ.get(
-    "OPENAI_MODEL",
-    "gpt-4o-mini",
-)
-GEMINI_MODEL = os.environ.get(
-    "GEMINI_MODEL",
-    "gemini-2.0-flash",
-)
-CLAUDE_MODEL = os.environ.get(
-    "CLAUDE_MODEL",
-    "claude-3-5-haiku-latest",
-)
+
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest")
 
 DATA_IN = BASE_DIR / "data" / "in"
 DATA_OUT = BASE_DIR / "data" / "out"

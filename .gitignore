@@ -5,6 +5,7 @@
 .ruff_cache/
 *.egg-info/
 data/out/*.jsonl
+data/out/settings.json
 .env
 .idea/
 .vscode/
