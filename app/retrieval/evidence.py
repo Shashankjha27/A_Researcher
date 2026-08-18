@@ -29,8 +29,14 @@ def _encode(texts: list[str]) -> torch.Tensor:
     with torch.no_grad():
         outputs = model(**inputs)
 
-    embeddings = outputs.last_hidden_state[:, 0]
-    return torch.nn.functional.normalize(embeddings, p=2, dim=1)
+    attention_mask = inputs["attention_mask"].unsqueeze(-1)
+    token_embeddings = outputs.last_hidden_state
+
+    summed = (token_embeddings * attention_mask).sum(dim=1)
+    counts = attention_mask.sum(dim=1).clamp(min=1)
+    mean_pooled = summed / counts
+
+    return torch.nn.functional.normalize(mean_pooled, p=2, dim=1)
 
 
 def retrieve_evidence(
