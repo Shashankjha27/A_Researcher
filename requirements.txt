@@ -3,7 +3,7 @@ uvicorn[standard]
 pydantic >= 2.6
 pytest
 httpx
-ruff
+ruff==0.16.3
 transformers
 sentence-transformers
 torch
