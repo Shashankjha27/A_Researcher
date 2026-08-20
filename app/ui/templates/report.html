@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ title }}</title>
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div class="page">
+
+    <header class="header">
+        <div>
+            <h1>{{ title }}</h1>
+            <p>Scientific paper verification report</p>
+        </div>
+    </header>
+
+    <main class="layout">
+
+        <section class="content">
+
+            <!-- =========================
+                 PDF UPLOAD
+            ========================== -->
+            <section class="card">
+                <h2>Verify a Research Paper</h2>
+
+                <form
+                    action="/verify/upload"
+                    method="post"
+                    enctype="multipart/form-data"
+                    class="upload-form"
+                >
+
+                    <div class="form-group">
+                        <label for="file">
+                            Research Paper PDF
+                        </label>
+
+                        <input
+                            type="file"
+                            id="file"
+                            name="file"
+                            accept=".pdf,application/pdf"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="paper_id">
+                            Paper ID
+                        </label>
+
+                        <input
+                            type="text"
+                            id="paper_id"
+                            name="paper_id"
+                            placeholder="paper-001"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="title">
+                            Paper Title
+                        </label>
+
+                        <input
+                            type="text"
+                            id="title"
+                            name="title"
+                            placeholder="Research paper title"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="authors">
+                            Authors
+                        </label>
+
+                        <input
+                            type="text"
+                            id="authors"
+                            name="authors"
+                            placeholder="Author One, Author Two"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="year">
+                            Publication Year
+                        </label>
+
+                        <input
+                            type="number"
+                            id="year"
+                            name="year"
+                            min="1900"
+                            max="2100"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="provider">
+                            LLM Provider
+                        </label>
+
+                        <select id="provider" name="provider">
+                            <option value="ollama" selected>
+                                Ollama
+                            </option>
+                            <option value="openai">
+                                OpenAI
+                            </option>
+                            <option value="gemini">
+                                Gemini
+                            </option>
+                            <option value="anthropic">
+                                Anthropic
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="model">
+                            Model
+                        </label>
+
+                        <input
+                            type="text"
+                            id="model"
+                            name="model"
+                            value="llama3.2:latest"
+                        >
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                    >
+                        Verify Paper
+                    </button>
+
+                </form>
+            </section>
+
+
+            <!-- =========================
+                 REPORT
+            ========================== -->
+            {% if report %}
+                <section class="card">
+                    <h2>Report</h2>
+
+                    {% if report is string %}
+                        <div class="report-body">
+                            {{ report }}
+                        </div>
+                    {% else %}
+                        <pre class="report-json">{{ report | tojson(indent=2) }}</pre>
+                    {% endif %}
+                </section>
+            {% else %}
+                <section class="card empty">
+                    <h2>No report loaded</h2>
+
+                    <p>
+                        Upload a research paper above to generate
+                        a verification report.
+                    </p>
+                </section>
+            {% endif %}
+
+
+            <!-- =========================
+                 CONTRADICTIONS
+            ========================== -->
+            {% if contradictions %}
+                <section class="card">
+                    <h2>Contradictions &amp; Evidence</h2>
+
+                    {% for item in contradictions %}
+
+                        <article class="contradiction">
+
+                            <div class="contradiction-header">
+                                <span>
+                                    Pair {{ loop.index }}
+                                </span>
+
+                                {% if item.nli_probability is not none %}
+                                    <strong>
+                                        NLI:
+                                        {{
+                                            "%.3f"|format(
+                                                item.nli_probability | float
+                                            )
+                                        }}
+                                    </strong>
+                                {% endif %}
+                            </div>
+
+                            <div class="contradiction-grid">
+
+                                <div class="contradiction-side">
+
+                                    <div class="side-label">
+                                        Claim A
+                                    </div>
+
+                                    {% if item.claim_a %}
+
+                                        <div class="contradiction-claim">
+                                            {{ item.claim_a.claim_text }}
+                                        </div>
+
+                                        {% if item.claim_a.source_sentence %}
+                                            <div class="contradiction-source">
+                                                <blockquote>
+                                                    {{ item.claim_a.source_sentence }}
+                                                </blockquote>
+                                            </div>
+                                        {% endif %}
+
+                                    {% else %}
+
+                                        <p class="muted">
+                                            Claim A data unavailable.
+                                        </p>
+
+                                    {% endif %}
+
+                                </div>
+
+
+                                <div class="versus">
+                                    VS
+                                </div>
+
+
+                                <div class="contradiction-side">
+
+                                    <div class="side-label">
+                                        Claim B
+                                    </div>
+
+                                    {% if item.claim_b %}
+
+                                        <div class="contradiction-claim">
+                                            {{ item.claim_b.claim_text }}
+                                        </div>
+
+                                        {% if item.claim_b.source_sentence %}
+                                            <div class="contradiction-source">
+                                                <blockquote>
+                                                    {{ item.claim_b.source_sentence }}
+                                                </blockquote>
+                                            </div>
+                                        {% endif %}
+
+                                    {% else %}
+
+                                        <p class="muted">
+                                            Claim B data unavailable.
+                                        </p>
+
+                                    {% endif %}
+
+                                </div>
+
+                            </div>
+
+                        </article>
+
+                    {% endfor %}
+
+                </section>
+            {% endif %}
+
+
+            <!-- =========================
+                 CLAIMS
+            ========================== -->
+            {% if claims %}
+
+                <section class="card">
+
+                    <h2>Claims</h2>
+
+                    {% for claim in claims %}
+
+                        <article class="claim">
+
+                            <div class="claim-header">
+
+                                <span class="claim-id">
+                                    {{ claim.claim_id }}
+                                </span>
+
+                                {% if claim.verdict %}
+                                    <span
+                                        class="verdict {{ claim.verdict | lower }}"
+                                    >
+                                        {{ claim.verdict }}
+                                    </span>
+                                {% endif %}
+
+                            </div>
+
+
+                            <p class="claim-text">
+                                {{ claim.claim_text }}
+                            </p>
+
+
+                            {% if claim.source_sentence %}
+
+                                <div class="source">
+
+                                    <h3>
+                                        Source Sentence
+                                    </h3>
+
+                                    <div
+                                        id="source-{{ claim.claim_id }}"
+                                        class="source-highlight"
+                                    >
+
+                                        <blockquote>
+                                            {{ claim.source_sentence }}
+                                        </blockquote>
+
+                                    </div>
+
+                                    {% if claim.start_offset is defined
+                                          and claim.end_offset is defined %}
+
+                                        <div class="offsets">
+
+                                            Offset:
+                                            {{ claim.start_offset }}
+                                            –
+                                            {{ claim.end_offset }}
+
+                                            <a
+                                                href="#source-{{ claim.claim_id }}"
+                                                class="source-link"
+                                            >
+                                                Jump to source
+                                            </a>
+
+                                        </div>
+
+                                    {% endif %}
+
+                                </div>
+
+                            {% endif %}
+
+
+                            {% if claim.confidence_score is defined %}
+
+                                <div class="confidence">
+
+                                    <h3>
+                                        Confidence
+                                    </h3>
+
+                                    <div class="confidence-score">
+
+                                        {{
+                                            "%.3f"|format(
+                                                claim.confidence_score | float
+                                            )
+                                        }}
+
+                                    </div>
+
+
+                                    {% if claim.confidence_components %}
+
+                                        <div class="components">
+
+                                            {% for key, value in
+                                                claim.confidence_components.items() %}
+
+                                                <div class="component">
+
+                                                    <span>
+                                                        {{ key }}
+                                                    </span>
+
+                                                    <strong>
+                                                        {{ value }}
+                                                    </strong>
+
+                                                </div>
+
+                                            {% endfor %}
+
+                                        </div>
+
+                                    {% endif %}
+
+                                </div>
+
+                            {% endif %}
+
+                        </article>
+
+                    {% endfor %}
+
+                </section>
+
+            {% endif %}
+
+        </section>
+
+
+        <!-- =========================
+             SIDEBAR
+        ========================== -->
+
+        <aside class="sidebar">
+
+            <section class="card">
+
+                <h2>Flags</h2>
+
+                {% if flags %}
+
+                    {% for flag in flags %}
+
+                        <div class="flag">
+
+                            {% if flag.flag_type %}
+                                <strong>
+                                    {{ flag.flag_type }}
+                                </strong>
+                            {% endif %}
+
+                            {% if flag.severity %}
+                                <span class="flag-severity">
+                                    {{ flag.severity }}
+                                </span>
+                            {% endif %}
+
+                            {% if flag.rationale_string %}
+                                <p>
+                                    {{ flag.rationale_string }}
+                                </p>
+                            {% endif %}
+
+                        </div>
+
+                    {% endfor %}
+
+                {% else %}
+
+                    <p class="muted">
+                        No flags.
+                    </p>
+
+                {% endif %}
+
+            </section>
+
+        </aside>
+
+    </main>
+
+</div>
+</body>
+</html>
