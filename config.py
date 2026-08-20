@@ -9,7 +9,7 @@ load_dotenv(BASE_DIR / ".env")
 
 NLI_THRESHOLD = 0.7
 SMALL_SAMPLE_N = 30
-NLI_MODEL = "microsoft/deberta-v3-base-mnli-fever-anli"
+NLI_MODEL = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 CONTRIEVER_MODEL = "facebook/contriever"
 
