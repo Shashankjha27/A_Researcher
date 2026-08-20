@@ -1,11 +1,23 @@
 from pathlib import Path
 
+import httpx
+import pytest
+
 from app.llm.client import get_llm_call
 from app.pipeline.extract import extract_claims_from_chunk
 from app.pipeline.ingest import ingest_paper
 from app.store.doc_store import DocStore
 
 
+def _ollama_running() -> bool:
+    try:
+        r = httpx.get("http://localhost:11434/api/tags", timeout=3)
+        return r.status_code == 200
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return False
+
+
+@pytest.mark.skipif(not _ollama_running(), reason="Ollama not running")
 def test_real_paper_ingest_and_extract():
     paper_path = next(Path("data/in").glob("*.pdf"))
 
