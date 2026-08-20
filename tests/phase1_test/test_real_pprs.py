@@ -10,6 +10,11 @@ from app.store.doc_store import DocStore
 
 
 def _ollama_running() -> bool:
+    import os
+
+    if not os.environ.get("LLM_MODEL"):
+        return False
+
     try:
         r = httpx.get("http://localhost:11434/api/tags", timeout=3)
         return r.status_code == 200
@@ -17,7 +22,7 @@ def _ollama_running() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _ollama_running(), reason="Ollama not running")
+@pytest.mark.skipif(not _ollama_running(), reason="Ollama not running or LLM_MODEL not set")
 def test_real_paper_ingest_and_extract():
     paper_path = next(Path("data/in").glob("*.pdf"))
 

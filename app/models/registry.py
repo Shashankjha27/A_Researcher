@@ -32,13 +32,16 @@ class ModelRegistry:
         return self._load("contriever", CONTRIEVER_MODEL, self._load_contriever)
 
     def _load_nli(self, model_name: str) -> Any:
-        raise NotImplementedError("NLI loader lands in Phase 2")
+        from sentence_transformers import CrossEncoder
+        return CrossEncoder(model_name)
 
     def _load_embeddings(self, model_name: str) -> Any:
-        raise NotImplementedError("embeddings loader lands in Phase 2")
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer(model_name)
 
     def _load_contriever(self, model_name: str) -> Any:
-        raise NotImplementedError("contriever loader lands in Phase 2")
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer(model_name)
 
     def health_status(self) -> dict[str, bool]:
         return {

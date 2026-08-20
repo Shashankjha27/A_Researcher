@@ -49,3 +49,23 @@ def test_contradiction_without_support_is_contradicted():
     )
 
     assert result == Verdict.CONTRADICTED
+
+
+def test_single_support_low_confidence_is_insufficient():
+    result = determine_verdict(
+        confidence=0.30,
+        support_count=1,
+        contradiction_count=0,
+    )
+
+    assert result == Verdict.INSUFFICIENT
+
+
+def test_two_support_low_confidence_is_provisional():
+    result = determine_verdict(
+        confidence=0.50,
+        support_count=2,
+        contradiction_count=0,
+    )
+
+    assert result == Verdict.PROVISIONALLY_SUPPORTED

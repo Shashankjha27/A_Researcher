@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import numpy as np
+from sentence_transformers import CrossEncoder
 
 from config import NLI_MODEL
 
 
 @lru_cache(maxsize=1)
-def _get_model():
-    tokenizer = AutoTokenizer.from_pretrained(NLI_MODEL)
-    model = AutoModelForSequenceClassification.from_pretrained(NLI_MODEL)
-    model.eval()
-    return tokenizer, model
+def _get_model() -> CrossEncoder:
+    return CrossEncoder(NLI_MODEL)
 
 
 def classify(
@@ -23,25 +20,16 @@ def classify(
     if not text_a.strip() or not text_b.strip():
         raise ValueError("Both texts must be non-empty.")
 
-    tokenizer, model = _get_model()
+    model = _get_model()
 
-    inputs = tokenizer(
-        text_a,
-        text_b,
-        return_tensors="pt",
-        truncation=True,
+    probs = model.predict(
+        [(text_a, text_b)],
+        apply_softmax=True,
     )
 
-    with torch.no_grad():
-        outputs = model(**inputs)
-
-    probabilities = torch.softmax(
-        outputs.logits,
-        dim=-1,
-    )[0]
-
-    index = int(torch.argmax(probabilities))
-    probability = float(probabilities[index])
+    row = probs[0]
+    index = int(np.argmax(row))
+    probability = float(row[index])
 
     label = model.config.id2label[index].lower()
 

@@ -8,7 +8,7 @@ from app.llm.client import get_llm_call
 from app.nli.pair_reduction import build_candidate_pairs
 from app.nli.verdict import build_pair_verdict
 from app.pipeline.extract import extract_claims_from_chunk
-from app.pipeline.ingest import ingest_paper
+from app.pipeline.ingest import ingest_paper, split_sentences
 from app.retrieval.evidence import retrieve_evidence
 from app.scoring.confidence import confidence_from_signals
 from app.scoring.report_builder import build_report
@@ -79,10 +79,8 @@ def run_pipeline(
     all_sentences: list[str] = []
 
     for block in paper.blocks:
-        sentences = [
-            sentence.strip() for sentence in block.text.split(".") if sentence.strip()
-        ]
-
+        spans = split_sentences(block.text)
+        sentences = [text for text, _, _ in spans]
         all_sentences.extend(sentences)
 
     claim_records: dict[str, dict[str, Any]] = {}
@@ -236,6 +234,7 @@ def run_pipeline(
             record,
             known_references=set(),
             retracted_references=set(),
+            paper_funding_source=paper.funding_source,
         )
 
         record["flags"] = flags

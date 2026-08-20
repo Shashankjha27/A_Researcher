@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.nli.direction_check import check_direction
+from app.nli.direction_check import check_relation
 from app.schemas import ClaimPairVerdict, Relation
 from config import NLI_MODEL, NLI_THRESHOLD
 
@@ -13,17 +13,13 @@ def build_pair_verdict(
     text_b: str,
     threshold: float = NLI_THRESHOLD,
 ) -> ClaimPairVerdict:
-    is_contradiction, _label, probability = check_direction(
+    relation_label, probability = check_relation(
         text_a,
         text_b,
         threshold=threshold,
     )
 
-    relation = (
-        Relation.CONTRADICTION
-        if is_contradiction
-        else Relation.SUPPORT
-    )
+    relation = Relation(relation_label)
 
     return ClaimPairVerdict(
         pair_id=str(uuid4()),

@@ -17,7 +17,7 @@ class VerifyPaper(BaseModel):
     paper_id: str
     title: str
     authors: list[str] = Field(default_factory=list)
-    year: int
+    year: int = Field(ge=1900)
 
 
 class VerifyRequest(BaseModel):
@@ -25,8 +25,8 @@ class VerifyRequest(BaseModel):
     provider: str | None = None
     model: str | None = None
     api_key: str | None = None
-    evidence_top_k: int = 5
-    pair_threshold: float = 0.75
+    evidence_top_k: int = Field(default=5, ge=1)
+    pair_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     nli_threshold: float | None = None
 
 

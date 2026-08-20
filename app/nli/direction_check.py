@@ -32,3 +32,52 @@ def check_direction(
         return False, label_ab, prob_ab
 
     return False, label_ba, prob_ba
+
+
+def _best_firing(
+    labels: list[tuple[str, float]],
+    target: str,
+    threshold: float,
+) -> float | None:
+    firing = [
+        probability
+        for label, probability in labels
+        if label == target and probability >= threshold
+    ]
+
+    if not firing:
+        return None
+
+    return max(firing)
+
+
+def check_relation(
+    text_a: str,
+    text_b: str,
+    threshold: float = NLI_THRESHOLD,
+) -> tuple[str, float]:
+    """
+    Classify the pair as contradiction / support / neutral.
+
+    Both directions are checked; contradiction takes precedence
+    over entailment (same precedence as the benchmark).
+    """
+    label_ab, prob_ab = classify(text_a, text_b)
+    label_ba, prob_ba = classify(text_b, text_a)
+
+    labels = [
+        (label_ab, prob_ab),
+        (label_ba, prob_ba),
+    ]
+
+    contradiction = _best_firing(labels, "contradiction", threshold)
+
+    if contradiction is not None:
+        return "contradiction", contradiction
+
+    support = _best_firing(labels, "entailment", threshold)
+
+    if support is not None:
+        return "support", support
+
+    return "neutral", max(prob_ab, prob_ba)

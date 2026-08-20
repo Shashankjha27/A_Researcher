@@ -35,9 +35,7 @@ _ABBREVS = {
     "et seq.",
 }
 
-_SENTENCE_END = re.compile(
-    r"""[.!?](?:["'”’)\]]+)?(?=\s|$)"""
-)
+_SENTENCE_END = re.compile(r"""[.!?](?:["'”’)\]]+)?(?=\s|$)""")
 
 _SECTION_NAMES = (
     r"abstract|"
@@ -118,12 +116,9 @@ def _is_abbreviation(
     text: str,
     punctuation_position: int,
 ) -> bool:
-    prefix = text[:punctuation_position + 1].lower()
+    prefix = text[: punctuation_position + 1].lower()
 
-    return any(
-        prefix.endswith(abbreviation)
-        for abbreviation in _ABBREVS
-    )
+    return any(prefix.endswith(abbreviation) for abbreviation in _ABBREVS)
 
 
 def split_sentences(
@@ -145,10 +140,7 @@ def split_sentences(
         end = match.end()
         sentence_start = start
 
-        while (
-            sentence_start < end
-            and text[sentence_start].isspace()
-        ):
+        while sentence_start < end and text[sentence_start].isspace():
             sentence_start += 1
 
         sentence = text[sentence_start:end]
@@ -166,10 +158,7 @@ def split_sentences(
 
     sentence_start = start
 
-    while (
-        sentence_start < len(text)
-        and text[sentence_start].isspace()
-    ):
+    while sentence_start < len(text) and text[sentence_start].isspace():
         sentence_start += 1
 
     if sentence_start < len(text):
@@ -203,12 +192,17 @@ def _find_section_header(
         return None
 
     consumed = match.group(0).strip()
-    remainder = line[match.end():].strip()
+    remainder = line[match.end() :].strip()
 
     if remainder and len(consumed) < 3:
         return None
 
     return match
+
+
+# TODO: For production accuracy, consider GROBID (https://github.com/kermitt2/grobid)
+# via grobid-client-python. It handles multi-column PDFs, numbered subsections,
+# and unconventional layouts. Requires a running GROBID Java service.
 
 
 def split_sections(
@@ -230,9 +224,7 @@ def split_sections(
         if not header_match:
             continue
 
-        section_name = _normalize_section_name(
-            header_match.group("name")
-        )
+        section_name = _normalize_section_name(header_match.group("name"))
 
         header_start = (
             line_match.start()
@@ -240,10 +232,7 @@ def split_sections(
             - len(line_match.group(0).lstrip())
         )
 
-        header_end = (
-            line_match.start()
-            + header_match.end()
-        )
+        header_end = line_match.start() + header_match.end()
 
         matches.append(
             (
@@ -263,21 +252,15 @@ def split_sections(
             )
         ]
 
-    sections: list[
-        tuple[str, str, int, int]
-    ] = []
+    sections: list[tuple[str, str, int, int]] = []
 
     first_header_start = matches[0][1]
 
     if first_header_start > 0:
         prefix = text[:first_header_start]
 
-        leading = len(prefix) - len(
-            prefix.lstrip()
-        )
-        trailing = len(prefix) - len(
-            prefix.rstrip()
-        )
+        leading = len(prefix) - len(prefix.lstrip())
+        trailing = len(prefix) - len(prefix.rstrip())
 
         start = leading
         end = len(prefix) - trailing
@@ -299,20 +282,12 @@ def split_sections(
     ) in enumerate(matches):
         body_start = header_end
 
-        body_end = (
-            matches[index + 1][1]
-            if index + 1 < len(matches)
-            else len(text)
-        )
+        body_end = matches[index + 1][1] if index + 1 < len(matches) else len(text)
 
         raw_body = text[body_start:body_end]
 
-        leading = len(raw_body) - len(
-            raw_body.lstrip()
-        )
-        trailing = len(raw_body) - len(
-            raw_body.rstrip()
-        )
+        leading = len(raw_body) - len(raw_body.lstrip())
+        trailing = len(raw_body) - len(raw_body.rstrip())
 
         start = body_start + leading
         end = body_end - trailing
@@ -352,13 +327,9 @@ def read_pdf(
                 decrypted = reader.decrypt("")
 
                 if not decrypted:
-                    raise ValueError(
-                        f"encrypted PDF, cannot read: {path}"
-                    )
+                    raise ValueError(f"encrypted PDF, cannot read: {path}")
             except Exception as exc:
-                raise ValueError(
-                    f"encrypted PDF, cannot read: {path}"
-                ) from exc
+                raise ValueError(f"encrypted PDF, cannot read: {path}") from exc
 
         pages: list[str] = []
 
@@ -371,9 +342,7 @@ def read_pdf(
         return "\n\n".join(pages)
 
     except PdfReadError as exc:
-        raise ValueError(
-            f"corrupted or unreadable PDF: {path}"
-        ) from exc
+        raise ValueError(f"corrupted or unreadable PDF: {path}") from exc
 
 
 def read_paper(
@@ -382,21 +351,14 @@ def read_paper(
     path = Path(path)
 
     if not path.is_file():
-        raise FileNotFoundError(
-            f"no such paper: {path}"
-        )
+        raise FileNotFoundError(f"no such paper: {path}")
 
     suffix = path.suffix.lower()
 
     if suffix not in SUPPORTED_EXTENSIONS:
-        supported = ", ".join(
-            sorted(SUPPORTED_EXTENSIONS)
-        )
+        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
 
-        raise ValueError(
-            f"unsupported file type '{suffix}'. "
-            f"Expected: {supported}"
-        )
+        raise ValueError(f"unsupported file type '{suffix}'. Expected: {supported}")
 
     if suffix == ".pdf":
         raw = read_pdf(path)
@@ -406,9 +368,7 @@ def read_paper(
     normalized = normalize_text(raw)
 
     if not normalized:
-        raise ValueError(
-            f"no extractable text in: {path}"
-        )
+        raise ValueError(f"no extractable text in: {path}")
 
     return normalized
 
@@ -455,17 +415,13 @@ def ingest_paper(
     suffix = path.suffix.lower()
 
     resolved_source = source or (
-        SourceType.PDF
-        if suffix == ".pdf"
-        else SourceType.TEXT
+        SourceType.PDF if suffix == ".pdf" else SourceType.TEXT
     )
 
     blocks = _build_blocks(text)
 
     if not blocks:
-        raise ValueError(
-            f"no document blocks could be created: {path}"
-        )
+        raise ValueError(f"no document blocks could be created: {path}")
 
     return Paper(
         paper_id=paper_id,

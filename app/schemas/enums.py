@@ -24,6 +24,7 @@ class RetractionStatus(str, Enum):
 class Relation(str, Enum):
     CONTRADICTION = "contradiction"
     SUPPORT = "support"
+    NEUTRAL = "neutral"
 
 
 class Severity(str, Enum):

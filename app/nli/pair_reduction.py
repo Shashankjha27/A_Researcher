@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import torch
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 
 from config import EMBEDDING_MODEL
 
@@ -33,7 +32,7 @@ def exact_dedupe(claims: list[str]) -> list[str]:
     return result
 
 
-def _encode(claims: list[str]) -> torch.Tensor:
+def _encode(claims: list[str]):
     model = _get_model()
 
     embeddings = model.encode(
@@ -57,29 +56,13 @@ def cluster_claims(
 
     embeddings = _encode(claims)
 
-    similarity = torch.matmul(
+    clusters = util.community_detection(
         embeddings,
-        embeddings.T,
+        min_community_size=1,
+        threshold=threshold,
     )
 
-    visited: set[int] = set()
-    clusters: list[list[int]] = []
-
-    for index in range(len(claims)):
-        if index in visited:
-            continue
-
-        cluster = [
-            other
-            for other in range(len(claims))
-            if float(similarity[index, other]) >= threshold
-        ]
-
-        cluster = sorted(set(cluster))
-        visited.update(cluster)
-        clusters.append(cluster)
-
-    return clusters
+    return [sorted(c) for c in clusters]
 
 
 def build_candidate_pairs(
@@ -110,7 +93,7 @@ def build_candidate_pairs(
 
     for cluster in clusters:
         for i, first_deduped in enumerate(cluster):
-            for second_deduped in cluster[i + 1:]:
+            for second_deduped in cluster[i + 1 :]:
                 for orig_a in dedupe_to_original[first_deduped]:
                     for orig_b in dedupe_to_original[second_deduped]:
                         pairs.append((orig_a, orig_b))

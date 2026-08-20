@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 load_dotenv(BASE_DIR / ".env")
 
-NLI_THRESHOLD = 0.7
+NLI_THRESHOLD = 0.85
 SMALL_SAMPLE_N = 30
 NLI_MODEL = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"

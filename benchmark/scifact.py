@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+from sklearn.metrics import classification_report
+
 from app.nli.nli_engine import classify
 from app.retrieval.evidence import retrieve_evidence
 from config import NLI_THRESHOLD
@@ -82,8 +84,10 @@ def predict_claim(
     threshold: float,
 ) -> tuple[str, float, str | None, float]:
     """
-    Retrieve top-k evidence using Contriever and classify each
-    retrieved sentence with the NLI model.
+    Retrieve top-k evidence sentences and classify each with the
+    NLI model as (evidence=premise, claim=hypothesis).
+
+    No sentence crossing the threshold -> NOT_ENOUGH_INFO.
 
     Returns:
         label,
@@ -106,42 +110,30 @@ def predict_claim(
 
     for sentence, retrieval_score in retrieved:
         label, probability = classify(
-            claim,
             sentence,
+            claim,
         )
 
         label = label.lower()
 
-        if (
-            label == "contradiction"
-            and probability >= threshold
-        ):
+        if label == "contradiction" and probability >= threshold:
             candidate = (
                 probability,
                 sentence,
                 retrieval_score,
             )
 
-            if (
-                best_contradiction is None
-                or probability > best_contradiction[0]
-            ):
+            if best_contradiction is None or probability > best_contradiction[0]:
                 best_contradiction = candidate
 
-        elif (
-            label == "entailment"
-            and probability >= threshold
-        ):
+        elif label == "entailment" and probability >= threshold:
             candidate = (
                 probability,
                 sentence,
                 retrieval_score,
             )
 
-            if (
-                best_support is None
-                or probability > best_support[0]
-            ):
+            if best_support is None or probability > best_support[0]:
                 best_support = candidate
 
     if best_contradiction is not None:
@@ -164,7 +156,7 @@ def predict_claim(
             retrieval_score,
         )
 
-    return "NEUTRAL", 0.0, None, 0.0
+    return "NOT_ENOUGH_INFO", 0.0, None, 0.0
 
 
 def calculate_metrics(
@@ -176,72 +168,31 @@ def calculate_metrics(
     followed by macro averages.
     """
 
-    rows = []
-
-    for label in LABELS:
-        tp = sum(
-            g == label and p == label
-            for g, p in zip(gold, predicted)
-        )
-
-        fp = sum(
-            g != label and p == label
-            for g, p in zip(gold, predicted)
-        )
-
-        fn = sum(
-            g == label and p != label
-            for g, p in zip(gold, predicted)
-        )
-
-        precision = (
-            tp / (tp + fp)
-            if tp + fp
-            else 0.0
-        )
-
-        recall = (
-            tp / (tp + fn)
-            if tp + fn
-            else 0.0
-        )
-
-        f1 = (
-            2 * precision * recall
-            / (precision + recall)
-            if precision + recall
-            else 0.0
-        )
-
-        rows.append(
-            (
-                label,
-                precision,
-                recall,
-                f1,
-            )
-        )
-
-    macro_precision = (
-        sum(row[1] for row in rows)
-        / len(rows)
+    report = classification_report(
+        gold,
+        predicted,
+        labels=LABELS,
+        output_dict=True,
+        zero_division=0,
     )
 
-    macro_recall = (
-        sum(row[2] for row in rows)
-        / len(rows)
-    )
+    rows = [
+        (
+            label,
+            report[label]["precision"],
+            report[label]["recall"],
+            report[label]["f1-score"],
+        )
+        for label in LABELS
+    ]
 
-    macro_f1 = (
-        sum(row[3] for row in rows)
-        / len(rows)
-    )
+    macro = report["macro avg"]
 
     return (
         rows,
-        macro_precision,
-        macro_recall,
-        macro_f1,
+        macro["precision"],
+        macro["recall"],
+        macro["f1-score"],
     )
 
 
@@ -255,14 +206,10 @@ def prepare_dataset(split: str):
     corpus_path = DATA_DIR / "corpus.jsonl"
 
     if not claims_path.exists():
-        raise FileNotFoundError(
-            f"Missing SciFact split: {claims_path}"
-        )
+        raise FileNotFoundError(f"Missing SciFact split: {claims_path}")
 
     if not corpus_path.exists():
-        raise FileNotFoundError(
-            f"Missing SciFact corpus: {corpus_path}"
-        )
+        raise FileNotFoundError(f"Missing SciFact corpus: {corpus_path}")
 
     claims = load_jsonl(claims_path)
     corpus = load_corpus(corpus_path)
@@ -311,9 +258,7 @@ def evaluate(
         gold.append(record["gold"])
         predicted.append(prediction)
 
-        if show_progress and (
-            index % 10 == 0 or index == total
-        ):
+        if show_progress and (index % 10 == 0 or index == total):
             print(
                 f"Processed {index}/{total} claims",
                 flush=True,
@@ -342,31 +287,16 @@ def print_metrics(
     print(f"Top-k retrieval: {TOP_K}")
     print()
 
-    print(
-        f"{'Label':<20}"
-        f"{'Precision':>12}"
-        f"{'Recall':>12}"
-        f"{'F1':>12}"
-    )
+    print(f"{'Label':<20}{'Precision':>12}{'Recall':>12}{'F1':>12}")
 
     print("-" * 56)
 
     for label, p, r, score in rows:
-        print(
-            f"{label:<20}"
-            f"{p:>12.4f}"
-            f"{r:>12.4f}"
-            f"{score:>12.4f}"
-        )
+        print(f"{label:<20}{p:>12.4f}{r:>12.4f}{score:>12.4f}")
 
     print("-" * 56)
 
-    print(
-        f"{'MACRO':<20}"
-        f"{precision:>12.4f}"
-        f"{recall:>12.4f}"
-        f"{f1:>12.4f}"
-    )
+    print(f"{'MACRO':<20}{precision:>12.4f}{recall:>12.4f}{f1:>12.4f}")
 
 
 def run(
@@ -389,31 +319,16 @@ def run(
     print(f"Top-k retrieval: {TOP_K}")
     print()
 
-    print(
-        f"{'Label':<20}"
-        f"{'Precision':>12}"
-        f"{'Recall':>12}"
-        f"{'F1':>12}"
-    )
+    print(f"{'Label':<20}{'Precision':>12}{'Recall':>12}{'F1':>12}")
 
     print("-" * 56)
 
     for label, p, r, score in rows:
-        print(
-            f"{label:<20}"
-            f"{p:>12.4f}"
-            f"{r:>12.4f}"
-            f"{score:>12.4f}"
-        )
+        print(f"{label:<20}{p:>12.4f}{r:>12.4f}{score:>12.4f}")
 
     print("-" * 56)
 
-    print(
-        f"{'MACRO':<20}"
-        f"{precision:>12.4f}"
-        f"{recall:>12.4f}"
-        f"{f1:>12.4f}"
-    )
+    print(f"{'MACRO':<20}{precision:>12.4f}{recall:>12.4f}{f1:>12.4f}")
 
 
 def tune_threshold(split: str):
@@ -443,12 +358,7 @@ def tune_threshold(split: str):
     print(f"Top-k retrieval: {TOP_K}")
     print()
 
-    print(
-        f"{'Threshold':<15}"
-        f"{'Precision':>12}"
-        f"{'Recall':>12}"
-        f"{'F1':>12}"
-    )
+    print(f"{'Threshold':<15}{'Precision':>12}{'Recall':>12}{'F1':>12}")
 
     print("-" * 51)
 
@@ -466,12 +376,7 @@ def tune_threshold(split: str):
             show_progress=False,
         )
 
-        print(
-            f"{threshold:<15.2f}"
-            f"{precision:>12.4f}"
-            f"{recall:>12.4f}"
-            f"{f1:>12.4f}"
-        )
+        print(f"{threshold:<15.2f}{precision:>12.4f}{recall:>12.4f}{f1:>12.4f}")
 
         if best is None or f1 > best["f1"]:
             best = {
@@ -493,9 +398,7 @@ def tune_threshold(split: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="SciFact benchmark runner"
-    )
+    parser = argparse.ArgumentParser(description="SciFact benchmark runner")
 
     parser.add_argument(
         "--split",

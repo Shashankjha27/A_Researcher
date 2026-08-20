@@ -78,7 +78,7 @@ def _safe_filename(filename: str) -> str:
 
 @router.post("/verify/upload")
 def upload_and_verify(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     title: str = Form(...),
     authors: str = Form(""),
     year: int = Form(...),

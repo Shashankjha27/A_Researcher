@@ -11,5 +11,6 @@ pypdf
 datasets
 python-multipart
 python-dotenv
-cryptography>=42.0
 litellm
+scikit-learn
+keyring

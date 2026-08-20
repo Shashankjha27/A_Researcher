@@ -1,14 +1,11 @@
-
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 
-from cryptography.fernet import Fernet, InvalidToken
+import keyring
 
 from app.config.schema import (
     LLMConfig,
@@ -26,131 +23,115 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
-_FERNET: Fernet | None = None
+_SERVICE_NAME = "a_researcher"
+_KEY_NAME = "settings"
+_MIGRATION_DONE_KEY = "migrated_from_json"
 
 
-def _get_fernet() -> Fernet:
-    global _FERNET
-
-    if _FERNET is not None:
-        return _FERNET
-
-    node_name = os.uname().nodename
-
-    try:
-        username = os.getlogin()
-    except OSError:
-        username = os.environ.get("USER", "default-user")
-
-    raw = hashlib.pbkdf2_hmac(
-        "sha256",
-        node_name.encode(),
-        username.encode(),
-        100_000,
-    )
-
-    key = base64.urlsafe_b64encode(raw[:32])
-
-    _FERNET = Fernet(key)
-
-    return _FERNET
-
-
-def _encrypt(plaintext: str) -> str:
-    return _get_fernet().encrypt(
-        plaintext.encode()
-    ).decode()
-
-
-def _decrypt(ciphertext: str) -> str:
-    return _get_fernet().decrypt(
-        ciphertext.encode()
-    ).decode()
-
-
-def _settings_path() -> Path:
-    DATA_OUT.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    return DATA_OUT / "settings.json"
-
-
-def get_settings() -> LLMConfig | None:
+def _migrate_from_json_if_needed() -> None:
+    """One-time migration: read encrypted settings.json, store in OS keychain, delete file."""
     path = _settings_path()
 
     if not path.exists():
-        return None
+        return
+
+    already_migrated = keyring.get_password(_SERVICE_NAME, _MIGRATION_DONE_KEY)
+    if already_migrated:
+        return
 
     try:
-        data = json.loads(
-            path.read_text(
-                encoding="utf-8",
-            )
-        )
+        from base64 import urlsafe_b64decode, urlsafe_b64encode
+        from hashlib import pbkdf2_hmac
 
+        from cryptography.fernet import Fernet, InvalidToken
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        encrypted_key = data.get("api_key")
         api_key = None
 
-        encrypted_key = data.get("api_key")
-
         if encrypted_key:
+            node_name = os.uname().nodename
             try:
-                api_key = _decrypt(encrypted_key)
+                username = os.getlogin()
+            except OSError:
+                username = os.environ.get("USER", "default-user")
+
+            raw = pbkdf2_hmac("sha256", node_name.encode(), username.encode(), 100_000)
+            key = urlsafe_b64decode(raw[:32])[:32]
+
+            try:
+                fernet = Fernet(urlsafe_b64encode(key))
+                api_key = fernet.decrypt(encrypted_key.encode()).decode()
             except InvalidToken:
                 logger.warning(
-                    "failed to decrypt api_key in settings.json"
+                    "failed to decrypt api_key during migration, skipping key"
                 )
                 api_key = None
 
-        return LLMConfig(
-            provider=data.get(
-                "provider",
-                "ollama",
-            ),
-            model=data.get(
-                "model",
-                "",
-            ),
-            api_key=api_key,
+        _save_to_keychain(
+            data.get("provider", "ollama"),
+            data.get("model", ""),
+            api_key,
         )
 
-    except (
-        json.JSONDecodeError,
-        KeyError,
-        TypeError,
-    ):
+        keyring.set_password(_SERVICE_NAME, _MIGRATION_DONE_KEY, "true")
+
+        path.unlink()
+        logger.info("migrated settings from settings.json to OS keychain")
+
+    except (json.JSONDecodeError, KeyError, TypeError, OSError):
         logger.warning(
-            "corrupt settings.json, ignoring"
+            "failed to migrate settings.json to keychain, leaving file in place"
         )
 
+
+def _save_to_keychain(provider: str, model: str, api_key: str | None) -> None:
+    keyring.set_password(
+        _SERVICE_NAME,
+        _KEY_NAME,
+        json.dumps(
+            {
+                "provider": provider,
+                "model": model,
+                "api_key": api_key,
+            }
+        ),
+    )
+
+
+def _load_from_keychain() -> dict | None:
+    raw = keyring.get_password(_SERVICE_NAME, _KEY_NAME)
+    if not raw:
         return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def get_settings() -> LLMConfig | None:
+    _migrate_from_json_if_needed()
+
+    data = _load_from_keychain()
+    if data is None:
+        return None
+
+    return LLMConfig(
+        provider=data.get("provider", "ollama"),
+        model=data.get("model", ""),
+        api_key=data.get("api_key"),
+    )
 
 
 def save_settings(
     request: LLMConfigRequest,
 ) -> LLMConfigResponse:
-    path = _settings_path()
+    _migrate_from_json_if_needed()
 
-    encrypted_key = None
-
-    if request.api_key:
-        encrypted_key = _encrypt(
-            request.api_key
-        )
-
-    data = {
-        "provider": request.provider,
-        "model": request.model,
-        "api_key": encrypted_key,
-    }
-
-    path.write_text(
-        json.dumps(
-            data,
-            indent=2,
-        ),
-        encoding="utf-8",
+    _save_to_keychain(
+        request.provider,
+        request.model,
+        request.api_key,
     )
 
     return LLMConfigResponse(
@@ -162,10 +143,10 @@ def save_settings(
 
 
 def clear_settings() -> None:
-    path = _settings_path()
-
-    if path.exists():
-        path.unlink()
+    try:
+        keyring.delete_password(_SERVICE_NAME, _KEY_NAME)
+    except keyring.errors.PasswordDeleteError:
+        pass
 
 
 def get_config_response() -> LLMConfigResponse:
@@ -182,6 +163,11 @@ def get_config_response() -> LLMConfigResponse:
         has_key=settings.api_key is not None,
         configured=True,
     )
+
+
+def _settings_path() -> Path:
+    DATA_OUT.mkdir(parents=True, exist_ok=True)
+    return DATA_OUT / "settings.json"
 
 
 def resolve_llm_config(

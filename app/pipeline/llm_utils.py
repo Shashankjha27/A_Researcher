@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas import Claim, Provenance
 from app.schemas.enums import EffectDirection, MethodType
@@ -13,15 +13,14 @@ class LLMOutputError(Exception):
     pass
 
 
-_REQUIRED_FIELDS = frozenset(
-    {
-        "claim_text",
-        "method_type",
-        "effect_direction",
-        "sample_size",
-        "source_sentence",
-    }
-)
+class _LLMClaimOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim_text: str
+    method_type: MethodType
+    effect_direction: EffectDirection
+    sample_size: int | None = Field(default=None, ge=0)
+    source_sentence: str
 
 
 def strip_json_fences(raw_output: str) -> str:
@@ -43,9 +42,7 @@ def strip_json_fences(raw_output: str) -> str:
     text = "\n".join(lines).strip()
 
     if not text:
-        raise LLMOutputError(
-            "empty response after removing markdown fences"
-        )
+        raise LLMOutputError("empty response after removing markdown fences")
     return text
 
 
@@ -55,9 +52,7 @@ def parse_json_array(raw_output: str) -> list[Any]:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise LLMOutputError(
-            f"invalid JSON: {exc.msg} at position {exc.pos}"
-        ) from exc
+        raise LLMOutputError(f"invalid JSON: {exc.msg} at position {exc.pos}") from exc
 
     if not isinstance(parsed, list):
         raise LLMOutputError("expected a JSON array at top level")
@@ -73,9 +68,7 @@ def find_source_offsets(
     start = chunk_text.find(source_sentence)
 
     if start < 0:
-        raise LLMOutputError(
-            "source_sentence not found verbatim in chunk"
-        )
+        raise LLMOutputError("source_sentence not found verbatim in chunk")
 
     end = start + len(source_sentence)
 
@@ -83,23 +76,6 @@ def find_source_offsets(
         chunk_start_offset + start,
         chunk_start_offset + end,
     )
-
-
-def _validate_sample_size(sample_size: Any, index: int) -> None:
-    if sample_size is None:
-        return
-
-    if isinstance(sample_size, bool) or not isinstance(
-        sample_size, int
-    ):
-        raise LLMOutputError(
-            f"item {index}: sample_size must be an integer or null"
-        )
-
-    if sample_size < 0:
-        raise LLMOutputError(
-            f"item {index}: sample_size cannot be negative"
-        )
 
 
 def validate_claim_item(
@@ -110,87 +86,33 @@ def validate_claim_item(
     chunk_text: str,
     chunk_start_offset: int,
 ) -> Claim:
-    if not isinstance(item, dict):
-        raise LLMOutputError(f"item {index}: expected an object")
-
-    missing = _REQUIRED_FIELDS - item.keys()
-
-    if missing:
-        raise LLMOutputError(
-            f"item {index}: missing required fields: "
-            f"{', '.join(sorted(missing))}"
-        )
-
-    extra = item.keys() - _REQUIRED_FIELDS
-
-    if extra:
-        raise LLMOutputError(
-            f"item {index}: unexpected fields: "
-            f"{', '.join(sorted(extra))}"
-        )
-
-    claim_text = item["claim_text"]
-    method_value = item["method_type"]
-    effect_value = item["effect_direction"]
-    sample_size = item["sample_size"]
-    source_sentence = item["source_sentence"]
-
-    if not isinstance(claim_text, str) or not claim_text.strip():
-        raise LLMOutputError(
-            f"item {index}: claim_text must be a non-empty string"
-        )
-
-    if (
-        not isinstance(source_sentence, str)
-        or not source_sentence.strip()
-    ):
-        raise LLMOutputError(
-            f"item {index}: source_sentence must be a non-empty string"
-        )
-
-    _validate_sample_size(sample_size, index)
+    try:
+        base = _LLMClaimOutput.model_validate(item)
+    except Exception as exc:
+        raise LLMOutputError(f"item {index}: validation failed: {exc}") from exc
 
     try:
-        method_type = MethodType(method_value)
-    except (TypeError, ValueError) as exc:
-        raise LLMOutputError(
-            f"item {index}: invalid method_type: {method_value!r}"
-        ) from exc
+        start_offset, end_offset = find_source_offsets(
+            source_sentence=base.source_sentence,
+            chunk_text=chunk_text,
+            chunk_start_offset=chunk_start_offset,
+        )
+    except LLMOutputError as exc:
+        raise LLMOutputError(f"item {index}: {exc}") from exc
 
-    try:
-        effect_direction = EffectDirection(effect_value)
-    except (TypeError, ValueError) as exc:
-        raise LLMOutputError(
-            f"item {index}: invalid effect_direction: {effect_value!r}"
-        ) from exc
-
-    start_offset, end_offset = find_source_offsets(
-        source_sentence=source_sentence,
-        chunk_text=chunk_text,
-        chunk_start_offset=chunk_start_offset,
+    return Claim.model_construct(
+        claim_id=f"cl_{paper_id}_{section}_{chunk_start_offset}_{index}",
+        paper_id=paper_id,
+        claim_text=base.claim_text.strip(),
+        method_type=base.method_type,
+        effect_direction=base.effect_direction,
+        provenance=Provenance(
+            source_sentence=base.source_sentence,
+            start_offset=start_offset,
+            end_offset=end_offset,
+        ),
+        sample_size=base.sample_size,
     )
-
-    try:
-        return Claim(
-            claim_id=(
-                f"cl_{paper_id}_{section}_"
-                f"{chunk_start_offset}_{index}"
-            ),
-            paper_id=paper_id,
-            claim_text=claim_text.strip(),
-            method_type=method_type,
-            effect_direction=effect_direction,
-            provenance=Provenance(
-                source_sentence=source_sentence,
-                start_offset=start_offset,
-                end_offset=end_offset,
-            ),
-            sample_size=sample_size,
-        )
-    except PydanticValidationError as exc:
-        raise LLMOutputError(
-            f"item {index}: schema validation failed: {exc}"
-        ) from exc
 
 
 def validate_claims(
