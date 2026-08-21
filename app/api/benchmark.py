@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from benchmark.scifact import evaluate, prepare_dataset
+from config import NLI_MODEL
 
 router = APIRouter(tags=["benchmark"])
 
@@ -22,27 +23,14 @@ class BenchmarkRequest(BaseModel):
     )
 
 
-@router.post("/benchmark/scifact")
-def run_benchmark(request: BenchmarkRequest) -> dict[str, Any]:
-    try:
-        dataset = prepare_dataset(request.split)
-    except FileNotFoundError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
+def run_scifact_benchmark(request: BenchmarkRequest) -> dict[str, Any]:
+    dataset = prepare_dataset(request.split)
 
-    try:
-        rows, precision, recall, f1 = evaluate(
-            dataset,
-            request.threshold,
-            show_progress=False,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Benchmark failed: {exc}",
-        ) from exc
+    rows, precision, recall, f1 = evaluate(
+        dataset,
+        request.threshold,
+        show_progress=False,
+    )
 
     labels = [
         {
@@ -57,6 +45,7 @@ def run_benchmark(request: BenchmarkRequest) -> dict[str, Any]:
     return {
         "split": request.split,
         "threshold": request.threshold,
+        "nli_model": NLI_MODEL,
         "claims_count": len(dataset),
         "labels": labels,
         "macro": {
@@ -65,3 +54,19 @@ def run_benchmark(request: BenchmarkRequest) -> dict[str, Any]:
             "f1": round(f1, 4),
         },
     }
+
+
+@router.post("/benchmark/scifact")
+def run_benchmark(request: BenchmarkRequest) -> dict[str, Any]:
+    try:
+        return run_scifact_benchmark(request)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Benchmark failed: {exc}",
+        ) from exc

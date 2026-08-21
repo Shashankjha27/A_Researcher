@@ -118,7 +118,16 @@ def _is_abbreviation(
 ) -> bool:
     prefix = text[: punctuation_position + 1].lower()
 
-    return any(prefix.endswith(abbreviation) for abbreviation in _ABBREVS)
+    for abbreviation in _ABBREVS:
+        if not prefix.endswith(abbreviation):
+            continue
+
+        boundary = len(prefix) - len(abbreviation)
+
+        if boundary == 0 or prefix[boundary - 1].isspace():
+            return True
+
+    return False
 
 
 def split_sentences(

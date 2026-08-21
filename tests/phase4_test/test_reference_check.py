@@ -31,6 +31,15 @@ def test_missing_reference_flagged():
     assert result["flag_type"] == "reference_check"
 
 
+def test_missing_reference_skipped_without_bibliography():
+    result = check_reference(
+        None,
+        set(),
+    )
+
+    assert result is None
+
+
 def test_retracted_reference_flagged():
     result = check_reference(
         "doi:10.1000/retracted",

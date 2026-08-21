@@ -175,18 +175,25 @@ def resolve_llm_config(
     header_model: str | None = None,
     header_key: str | None = None,
 ) -> LLMConfig:
-    # 1. Request headers have highest priority.
-    if header_provider and header_key:
+    # 1. Request headers have highest priority. Local providers (ollama)
+    #    do not need an API key, so an explicit ollama override is valid
+    #    without one.
+    if header_provider and (
+        header_key or header_provider == "ollama"
+    ):
         return LLMConfig(
             provider=header_provider,
             model=header_model or "",
             api_key=header_key,
         )
 
-    # 2. Use saved application settings.
+    # 2. Use saved application settings. Local providers (ollama) do not
+    #    need an API key, so saved settings are valid without one.
     settings = get_settings()
 
-    if settings and settings.api_key:
+    if settings and (
+        settings.provider == "ollama" or settings.api_key
+    ):
         return settings
 
     # 3. Fall back to environment configuration.

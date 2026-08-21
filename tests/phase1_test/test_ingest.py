@@ -59,6 +59,19 @@ def test_split_sentences_handles_abbreviations():
     assert sentences[1][0] == "The result is significant."
 
 
+def test_split_sentences_not_confused_by_words_ending_in_abbrev_prefix():
+    text = (
+        "The treatment significantly improves recovery in the control "
+        "group. However, a follow-up analysis disagrees."
+    )
+
+    sentences = split_sentences(text)
+
+    assert len(sentences) == 2
+    assert sentences[0][0].endswith("control group.")
+    assert sentences[1][0] == "However, a follow-up analysis disagrees."
+
+
 def test_split_sentences_handles_decimal_numbers():
     text = (
         "The model achieved 92.5% accuracy. "

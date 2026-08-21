@@ -11,6 +11,7 @@ from app.schemas.enums import (
     Severity,
     SourceType,
 )
+from app.scoring.verdict import Verdict
 
 
 class Block(BaseModel):
@@ -49,6 +50,11 @@ class Claim(BaseModel):
     sample_size: int | None = None
     confidence_components: dict[str, float] = {}
     confidence_score: float = 0.0
+    support_count: int = 0
+    contradiction_count: int = 0
+    verdict: Verdict | None = None
+    supporting_evidence: list[dict] = []
+    contradicting_evidence: list[dict] = []
 
 class ClaimPairVerdict(BaseModel):
     pair_id: str
@@ -67,3 +73,34 @@ class Flag(BaseModel):
     flag_type: FlagType
     severity: Severity
     rationale_string: str
+
+class DebateTurn(BaseModel):
+    role: str
+    text: str
+
+class DebateRecord(BaseModel):
+    debate_id: str
+    claim_id: str
+    paper_id: str
+    model: str
+    rounds: int
+    turns: list[DebateTurn]
+    judge_verdict: Verdict
+    judge_rationale: str
+    created_at: datetime
+
+class VerdictOverride(BaseModel):
+    override_id: str
+    claim_id: str
+    paper_id: str
+    original_verdict: Verdict | None = None
+    overridden_verdict: Verdict
+    note: str | None = None
+    created_at: datetime
+
+class FlagReview(BaseModel):
+    review_id: str
+    flag_id: str
+    claim_id: str
+    accepted: bool
+    created_at: datetime

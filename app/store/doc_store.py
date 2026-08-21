@@ -4,7 +4,15 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.schemas import Claim, ClaimPairVerdict, Flag, Paper
+from app.schemas import (
+    Claim,
+    ClaimPairVerdict,
+    DebateRecord,
+    Flag,
+    FlagReview,
+    Paper,
+    VerdictOverride,
+)
 from config import DATA_OUT
 
 ENTITY_MODELS: dict[str, type[BaseModel]] = {
@@ -12,6 +20,9 @@ ENTITY_MODELS: dict[str, type[BaseModel]] = {
     "claims": Claim,
     "pair_verdicts": ClaimPairVerdict,
     "flags": Flag,
+    "debates": DebateRecord,
+    "verdict_overrides": VerdictOverride,
+    "flag_reviews": FlagReview,
 }
 
 ID_FIELDS: dict[str, str] = {
@@ -19,6 +30,9 @@ ID_FIELDS: dict[str, str] = {
     "claims": "claim_id",
     "pair_verdicts": "pair_id",
     "flags": "flag_id",
+    "debates": "debate_id",
+    "verdict_overrides": "override_id",
+    "flag_reviews": "review_id",
 }
 
 
@@ -62,11 +76,15 @@ class DocStore:
 
         id_field = ID_FIELDS[entity]
 
+        # The store is append-only: the last row for an id is the
+        # latest version of the document.
+        latest: BaseModel | None = None
+
         for doc in self._iter(entity):
             if getattr(doc, id_field) == doc_id:
-                return doc
+                latest = doc
 
-        return None
+        return latest
 
     def query(self, entity: str, **filters: Any) -> list[BaseModel]:
         self._check_entity(entity)

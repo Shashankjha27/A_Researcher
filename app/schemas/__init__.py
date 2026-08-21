@@ -11,17 +11,24 @@ from app.schemas.schemas import (
     Block,
     Claim,
     ClaimPairVerdict,
+    DebateRecord,
+    DebateTurn,
     Flag,
+    FlagReview,
     Paper,
     Provenance,
+    VerdictOverride,
 )
 
 __all__ = [
     "Block",
     "Claim",
     "ClaimPairVerdict",
+    "DebateRecord",
+    "DebateTurn",
     "EffectDirection",
     "Flag",
+    "FlagReview",
     "FlagType",
     "MethodType",
     "Paper",
@@ -30,4 +37,5 @@ __all__ = [
     "RetractionStatus",
     "Severity",
     "SourceType",
+    "VerdictOverride",
 ]

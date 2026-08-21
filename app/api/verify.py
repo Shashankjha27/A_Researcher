@@ -15,9 +15,9 @@ router = APIRouter(tags=["verification"])
 class VerifyPaper(BaseModel):
     paper_path: str
     paper_id: str
-    title: str
+    title: str | None = None
     authors: list[str] = Field(default_factory=list)
-    year: int = Field(ge=1900)
+    year: int | None = Field(default=None, ge=1900)
 
 
 class VerifyRequest(BaseModel):
@@ -34,9 +34,9 @@ def _run_verification(
     path: Path,
     *,
     paper_id: str,
-    title: str,
+    title: str | None,
     authors: list[str],
-    year: int,
+    year: int | None,
     provider: str | None,
     model: str | None,
     api_key: str | None,

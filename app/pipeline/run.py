@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from app.flags.runner import run_flags
 from app.llm.client import get_llm_call
+from app.nli.evidence_check import evidence_support_counts
 from app.nli.pair_reduction import build_candidate_pairs
 from app.nli.verdict import build_pair_verdict
 from app.pipeline.extract import extract_claims_from_chunk
@@ -14,15 +16,16 @@ from app.scoring.confidence import confidence_from_signals
 from app.scoring.report_builder import build_report
 from app.scoring.verdict import determine_verdict
 from app.store.doc_store import DocStore
+from config import NLI_THRESHOLD
 
 
 def run_pipeline(
     paper_path: str | Path,
     *,
     paper_id: str,
-    title: str,
-    authors: list[str],
-    year: int,
+    title: str | None = None,
+    authors: list[str] | None = None,
+    year: int | None = None,
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
@@ -30,9 +33,25 @@ def run_pipeline(
     pair_threshold: float = 0.75,
     nli_threshold: float | None = None,
     store: DocStore | None = None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
 
     store = store or DocStore()
+
+    def report_stage(stage: str) -> None:
+        if progress_callback is not None:
+            progress_callback(stage)
+
+    report_stage("ingest")
+
+    if not title or not authors or year is None:
+        from app.pipeline.metadata import extract_metadata
+
+        extracted = extract_metadata(paper_path)
+
+        title = title or extracted["title"]
+        authors = authors or extracted["authors"]
+        year = year if year is not None else extracted["year"]
 
     paper = ingest_paper(
         paper_path,
@@ -48,7 +67,10 @@ def run_pipeline(
         provider=provider,
         model=model,
         api_key=api_key,
+        json_mode=True,
     )
+
+    report_stage("extract")
 
     claims = []
 
@@ -62,9 +84,6 @@ def run_pipeline(
         )
 
         claims.extend(block_claims)
-
-    for claim in claims:
-        store.save("claims", claim)
 
     if not claims:
         report = build_report([], title=paper.title)
@@ -84,6 +103,8 @@ def run_pipeline(
         all_sentences.extend(sentences)
 
     claim_records: dict[str, dict[str, Any]] = {}
+
+    report_stage("evidence")
 
     for claim in claims:
         evidence = retrieve_evidence(
@@ -118,6 +139,8 @@ def run_pipeline(
         }
 
     claim_texts = [claim.claim_text for claim in claims]
+
+    report_stage("nli")
 
     candidate_pairs = build_candidate_pairs(
         claim_texts,
@@ -167,6 +190,28 @@ def run_pipeline(
                 }
             )
 
+    evidence_threshold = (
+        nli_threshold if nli_threshold is not None else NLI_THRESHOLD
+    )
+
+    for record in claim_records.values():
+        support_count, contradiction_count, firing_probability = (
+            evidence_support_counts(
+                claim_text=record["claim_text"],
+                evidence_texts=[
+                    item["text"]
+                    for item in record["supporting_evidence"]
+                ],
+                threshold=evidence_threshold,
+            )
+        )
+
+        record["evidence_support_count"] = support_count
+        record["evidence_contradiction_count"] = contradiction_count
+        record["evidence_nli_probability"] = firing_probability
+
+    report_stage("score")
+
     for claim in claims:
         record = claim_records[claim.claim_id]
 
@@ -198,20 +243,40 @@ def run_pipeline(
             )
         ]
 
-        total_pairs = len(supports) + len(contradictions)
+        support_count = len(supports) + record["evidence_support_count"]
+        contradiction_count = (
+            len(contradictions) + record["evidence_contradiction_count"]
+        )
+
+        total_pairs = support_count + contradiction_count
 
         if total_pairs:
-            agreement = 1.0 if not contradictions else 0.0
+            agreement = 1.0 if not contradiction_count else 0.0
         else:
             agreement = 0.0
 
-        if contradictions:
-            nli_probability = max(pair.nli_probability for pair in contradictions)
-        elif supports:
-            nli_probability = max(pair.nli_probability for pair in supports)
+        contradiction_probs = [
+            pair.nli_probability for pair in contradictions
+        ]
+        support_probs = [pair.nli_probability for pair in supports]
+
+        if record["evidence_contradiction_count"]:
+            contradiction_probs.append(
+                record["evidence_nli_probability"]
+            )
+
+        if record["evidence_support_count"]:
+            support_probs.append(record["evidence_nli_probability"])
+
+        if contradiction_probs:
+            nli_probability = max(contradiction_probs)
+        elif support_probs:
+            nli_probability = max(support_probs)
         else:
             nli_probability = (
-                sum(evidence_scores) / len(evidence_scores) if evidence_scores else 0.0
+                sum(evidence_scores) / len(evidence_scores)
+                if evidence_scores
+                else 0.0
             )
 
         confidence, components = confidence_from_signals(
@@ -222,10 +287,12 @@ def run_pipeline(
 
         verdict = determine_verdict(
             confidence=confidence,
-            support_count=len(supports),
-            contradiction_count=len(contradictions),
+            support_count=support_count,
+            contradiction_count=contradiction_count,
         )
 
+        record["support_count"] = support_count
+        record["contradiction_count"] = contradiction_count
         record["confidence_score"] = confidence
         record["confidence_components"] = components
         record["verdict"] = verdict.value
@@ -241,6 +308,11 @@ def run_pipeline(
 
         claim.confidence_score = confidence
         claim.confidence_components = components
+        claim.support_count = support_count
+        claim.contradiction_count = contradiction_count
+        claim.verdict = verdict
+        claim.supporting_evidence = record["supporting_evidence"]
+        claim.contradicting_evidence = record["contradicting_evidence"]
 
     for claim in claims:
         store.save("claims", claim)

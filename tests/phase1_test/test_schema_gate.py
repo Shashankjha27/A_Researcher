@@ -54,12 +54,52 @@ def test_reject_invalid_json():
 def test_reject_non_array():
     raw = """
     {
-        "claim_text": "The treatment improved accuracy."
+        "answer": 42
     }
     """
 
     with pytest.raises(SchemaGateError):
         parse_json_array(raw)
+
+
+def test_unwraps_single_key_object_wrapper():
+    raw = """
+    {
+        "claims": [
+            {
+                "claim_text": "The treatment improved accuracy.",
+                "method_type": "RCT",
+                "effect_direction": "positive",
+                "sample_size": 100,
+                "source_sentence": "The treatment improved accuracy."
+            }
+        ]
+    }
+    """
+
+    result = parse_json_array(raw)
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["claim_text"] == "The treatment improved accuracy."
+
+
+def test_lifts_single_claim_object_into_array():
+    raw = """
+    {
+        "claim_text": "The treatment improved accuracy.",
+        "method_type": "RCT",
+        "effect_direction": "positive",
+        "sample_size": 100,
+        "source_sentence": "The treatment improved accuracy."
+    }
+    """
+
+    result = parse_json_array(raw)
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["claim_text"] == "The treatment improved accuracy."
 
 
 def test_validate_valid_claim():

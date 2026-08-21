@@ -41,6 +41,7 @@ def extract(
         provider=provider,
         model=model,
         api_key=api_key,
+        json_mode=True,
     )
 
     claims = []

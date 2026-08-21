@@ -6,6 +6,12 @@ def check_reference(
     retracted_references = retracted_references or set()
 
     if not reference_id or not reference_id.strip():
+        if not known_references:
+            # No bibliography was parsed for this paper, so there is
+            # nothing to verify against; flagging every claim would
+            # just be noise.
+            return None
+
         return {
             "flag_type": "reference_check",
             "severity": "high",

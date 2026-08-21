@@ -3,6 +3,7 @@ from app.nli.pair_reduction import (
     cluster_claims,
     exact_dedupe,
 )
+from tests.model_guard import requires_models
 
 
 def test_exact_dedupe():
@@ -42,6 +43,7 @@ def test_build_candidate_pairs_single_claim():
     assert build_candidate_pairs(claims) == []
 
 
+@requires_models
 def test_cluster_claims_no_transitive_merge():
     claims = [
         "The treatment improved recovery.",

@@ -12,6 +12,18 @@ def test_get_missing_returns_none(store) -> None:
     assert store.get("claims", "nope") is None
 
 
+def test_get_returns_latest_version(store, claim) -> None:
+    store.save("claims", claim)
+
+    updated = claim.model_copy(update={"verdict": "supported"})
+    store.save("claims", updated)
+
+    fetched = store.get("claims", claim.claim_id)
+
+    assert fetched is not None
+    assert fetched.verdict == "supported"
+
+
 def test_all_preserves_order(store, claim) -> None:
     store.save("claims", claim)
     store.save("claims", claim.model_copy(update={"claim_id": "c_0002"}))

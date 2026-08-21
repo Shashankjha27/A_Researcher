@@ -4,8 +4,18 @@
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
-data/out/*.jsonl
-data/out/settings.json
+
+# entire data folder: runtime store, corpora, input papers.
+# Exception: the checked-in demo fixtures (fresh clones need them
+# for the instant demo report).
+data/*
+!data/demo/
+data/demo/*
+!data/demo/golden_contradiction.txt
+!data/demo/demo_fixture_papers.jsonl
+!data/demo/demo_fixture_claims.jsonl
+!data/demo/demo_fixture_pair_verdicts.jsonl
+
 .env
 .idea/
 .vscode/

@@ -1,0 +1,1 @@
+{"pair_id":"e7edce8d-b2f5-4b0c-ab35-0352c83ce743","claim_id_a":"cl_paper-demo-golden_demo_0_0","claim_id_b":"cl_paper-demo-golden_demo_0_1","relation":"contradiction","confidence_score":0.99951171875,"nli_probability":0.99951171875,"nli_model":"MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli","threshold":0.85,"checked_at":"2026-08-21T06:26:56.650185Z"}
